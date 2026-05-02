@@ -37,3 +37,6 @@ aws dynamodb create-table \
   --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
   --endpoint-url http://dynamodb-local:8000 \
   --region us-east-1
+
+echo 'DynamoDB table created successfully.'
+exit 0 
