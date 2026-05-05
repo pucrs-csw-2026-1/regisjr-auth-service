@@ -102,13 +102,19 @@ echo "Running auth flow checks against ${API_URL} using realm ${KEYCLOAK_REALM}.
 request_token
 echo "✅ Access token retrieved from Keycloak"
 
-read -r status_no_auth body_no_auth < <(request_with_status "GET" "${API_URL}/me")
-assert_status "$status_no_auth" "401" "GET /me without token"
+read_response() {
+  mapfile -t _resp < <("$@")
+  _status="${_resp[0]}"
+  _body="${_resp[1]:-}"
+}
 
-read -r status_me body_me < <(request_with_status "GET" "${API_URL}/me" "Authorization: Bearer ${ACCESS_TOKEN}")
-assert_status "$status_me" "200" "GET /me with token"
+read_response request_with_status "GET" "${API_URL}/me"
+assert_status "$_status" "401" "GET /me without token"
 
-me_keycloak_user_id="$(extract_json_field "$body_me" "keycloakUserId" || true)"
+read_response request_with_status "GET" "${API_URL}/me" "Authorization: Bearer ${ACCESS_TOKEN}"
+assert_status "$_status" "200" "GET /me with token"
+
+me_keycloak_user_id="$(extract_json_field "$_body" "keycloakUserId" || true)"
 if [[ -z "$me_keycloak_user_id" ]]; then
   echo "❌ GET /me response did not include keycloakUserId."
   exit 1
@@ -121,20 +127,20 @@ payload="$(cat <<JSON
 JSON
 )"
 
-read -r status_create body_create < <(request_with_status "POST" "${API_URL}/users" "Authorization: Bearer ${ACCESS_TOKEN}" "$payload")
-assert_status "$status_create" "201" "POST /users with token"
+read_response request_with_status "POST" "${API_URL}/users" "Authorization: Bearer ${ACCESS_TOKEN}" "$payload"
+assert_status "$_status" "201" "POST /users with token"
 
-created_user_id="$(extract_json_field "$body_create" "userId" || true)"
+created_user_id="$(extract_json_field "$_body" "userId" || true)"
 if [[ -z "$created_user_id" ]]; then
   echo "❌ POST /users response did not include userId."
   exit 1
 fi
 echo "✅ Created user profile userId=${created_user_id}"
 
-read -r status_get body_get < <(request_with_status "GET" "${API_URL}/users/${created_user_id}" "Authorization: Bearer ${ACCESS_TOKEN}")
-assert_status "$status_get" "200" "GET /users/:id with token"
+read_response request_with_status "GET" "${API_URL}/users/${created_user_id}" "Authorization: Bearer ${ACCESS_TOKEN}"
+assert_status "$_status" "200" "GET /users/:id with token"
 
-fetched_user_id="$(extract_json_field "$body_get" "userId" || true)"
+fetched_user_id="$(extract_json_field "$_body" "userId" || true)"
 if [[ "$fetched_user_id" != "$created_user_id" ]]; then
   echo "❌ GET /users/:id returned unexpected userId (${fetched_user_id})."
   exit 1
