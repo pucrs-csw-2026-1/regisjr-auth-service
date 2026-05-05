@@ -14,3 +14,35 @@ services:
     command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
     ports:
       - "8000:8000"
+
+  dynamodb-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - dynamodb-local
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      - ./scripts/dynamodb-init.sh:/scripts/dynamodb-init.sh:ro
+    entrypoint: ["/bin/sh", "/scripts/dynamodb-init.sh"]
+
+  app:
+    build:
+      context: .
+      target: runner
+    depends_on:
+      dynamodb-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_started
+    environment:
+      PORT: 3000
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: event-system
+      KEYCLOAK_CLIENT_ID: nest-api
+      AWS_REGION: us-east-1
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      DYNAMODB_TABLE_NAME: event-system
+    ports:
+      - "3000:3000"
