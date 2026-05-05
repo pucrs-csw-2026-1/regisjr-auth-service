@@ -91,10 +91,12 @@ export class UsersRepository {
     const values: Record<string, string> = {
       ':updatedAt': new Date().toISOString(),
     };
+    const names: Record<string, string> = {};
 
     if (dto.name !== undefined) {
       updates.push('#name = :name');
       values[':name'] = dto.name;
+      names['#name'] = 'name';
     }
 
     if (dto.email !== undefined) {
@@ -105,6 +107,7 @@ export class UsersRepository {
     if (dto.status !== undefined) {
       updates.push('#status = :status');
       values[':status'] = dto.status;
+      names['#status'] = 'status';
     }
 
     const result = await this.dynamoDb.client.send(
@@ -115,10 +118,7 @@ export class UsersRepository {
           SK: 'PROFILE',
         },
         UpdateExpression: `SET ${updates.join(', ')}`,
-        ExpressionAttributeNames: {
-          '#name': 'name',
-          '#status': 'status',
-        },
+        ...(Object.keys(names).length && { ExpressionAttributeNames: names }),
         ExpressionAttributeValues: values,
         ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK)',
         ReturnValues: 'ALL_NEW',
