@@ -43,6 +43,19 @@ describe('UsersRoleRepository', () => {
         ConflictException,
       );
     });
+
+    it('re-throws unexpected errors from PutCommand', async () => {
+      const send = jest
+        .fn()
+        .mockResolvedValueOnce({ Item: undefined })
+        .mockRejectedValueOnce(new Error('provisioned throughput exceeded'));
+
+      const repo = new UsersRoleRepository(makeDynamoDb(send));
+
+      await expect(repo.assignRole(USER_ID, ROLE_NAME)).rejects.toThrow(
+        'provisioned throughput exceeded',
+      );
+    });
   });
 
   describe('listRoles', () => {

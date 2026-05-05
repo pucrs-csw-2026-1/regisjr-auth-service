@@ -144,6 +144,14 @@ describe('UsersService', () => {
       expect(result.name).toBe('Charles Babbage');
     });
 
+    it('returns response when DTO is empty (only updatedAt changes)', async () => {
+      repo.updateProfile.mockResolvedValue(mockProfile());
+
+      const result = await service.updateProfile('user-1', {});
+
+      expect(result.userId).toBe('user-1');
+    });
+
     it('throws NotFoundException when profile does not exist', async () => {
       repo.updateProfile.mockResolvedValue(null);
 
@@ -218,6 +226,15 @@ describe('UsersService', () => {
       expect(result.map((r) => r.roleName)).toEqual(['organizador', 'participante']);
     });
 
+    it('returns empty array when user has no roles assigned', async () => {
+      repo.getProfile.mockResolvedValue(mockProfile());
+      roleRepo.listRoles.mockResolvedValue([]);
+
+      const result = await service.listRoles('user-1');
+
+      expect(result).toEqual([]);
+    });
+
     it('throws NotFoundException when profile does not exist', async () => {
       repo.getProfile.mockResolvedValue(null);
 
@@ -245,6 +262,17 @@ describe('UsersService', () => {
         NotFoundException,
       );
       expect(roleRepo.removeRole).not.toHaveBeenCalled();
+    });
+
+    it('propagates NotFoundException when role does not exist', async () => {
+      repo.getProfile.mockResolvedValue(mockProfile());
+      roleRepo.removeRole.mockRejectedValue(
+        new NotFoundException("Role 'organizador' not found for user"),
+      );
+
+      await expect(service.removeRole('user-1', 'organizador')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });
