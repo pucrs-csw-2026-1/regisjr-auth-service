@@ -1,4 +1,5 @@
-import { ConflictException } from '@nestjs/common';
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { DynamoDbService } from '../database/dynamodb.service';
 import { UsersRoleRepository } from './users-role.repository';
 
@@ -13,8 +14,8 @@ describe('UsersRoleRepository', () => {
     it('creates role when it does not exist yet', async () => {
       const send = jest
         .fn()
-        .mockResolvedValueOnce({ Items: [] })  // getRole query → not found
-        .mockResolvedValueOnce({});            // PutCommand
+        .mockResolvedValueOnce({ Item: undefined })  // getRole (GetCommand) → not found
+        .mockResolvedValueOnce({});                  // PutCommand
 
       const repo = new UsersRoleRepository(makeDynamoDb(send));
       const result = await repo.assignRole(USER_ID, ROLE_NAME);
@@ -34,7 +35,7 @@ describe('UsersRoleRepository', () => {
         roleName: ROLE_NAME,
         assignedAt: '2024-01-01T00:00:00.000Z',
       };
-      const send = jest.fn().mockResolvedValueOnce({ Items: [existingRole] });
+      const send = jest.fn().mockResolvedValueOnce({ Item: existingRole });
 
       const repo = new UsersRoleRepository(makeDynamoDb(send));
 
@@ -81,6 +82,27 @@ describe('UsersRoleRepository', () => {
         PK: 'USER#user-1',
         SK: 'ROLE#organizador',
       });
+    });
+
+    it('throws NotFoundException when role does not exist', async () => {
+      const send = jest.fn().mockRejectedValueOnce(
+        new ConditionalCheckFailedException({ message: 'condition failed', $metadata: {} }),
+      );
+
+      const repo = new UsersRoleRepository(makeDynamoDb(send));
+
+      await expect(repo.removeRole(USER_ID, ROLE_NAME)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('re-throws unexpected errors from DynamoDB', async () => {
+      const unexpectedError = new Error('network error');
+      const send = jest.fn().mockRejectedValueOnce(unexpectedError);
+
+      const repo = new UsersRoleRepository(makeDynamoDb(send));
+
+      await expect(repo.removeRole(USER_ID, ROLE_NAME)).rejects.toThrow('network error');
     });
   });
 });

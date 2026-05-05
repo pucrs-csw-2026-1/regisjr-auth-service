@@ -1,9 +1,11 @@
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
+  GetCommand,
   PutCommand,
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DynamoDbService } from '../database/dynamodb.service';
 import { UserRole } from './entities';
 
@@ -54,32 +56,37 @@ export class UsersRoleRepository {
   }
 
   async removeRole(userId: string, roleName: string): Promise<void> {
-    await this.dynamoDb.client.send(
-      new DeleteCommand({
+    try {
+      await this.dynamoDb.client.send(
+        new DeleteCommand({
+          TableName: this.dynamoDb.tableName,
+          Key: {
+            PK: this.userPk(userId),
+            SK: this.roleSk(roleName),
+          },
+          ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK)',
+        }),
+      );
+    } catch (err) {
+      if (err instanceof ConditionalCheckFailedException) {
+        throw new NotFoundException(`Role '${roleName}' not found for user`);
+      }
+      throw err;
+    }
+  }
+
+  private async getRole(userId: string, roleName: string): Promise<UserRole | null> {
+    const result = await this.dynamoDb.client.send(
+      new GetCommand({
         TableName: this.dynamoDb.tableName,
         Key: {
           PK: this.userPk(userId),
           SK: this.roleSk(roleName),
         },
-        ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK)',
-      }),
-    );
-  }
-
-  private async getRole(userId: string, roleName: string): Promise<UserRole | null> {
-    const result = await this.dynamoDb.client.send(
-      new QueryCommand({
-        TableName: this.dynamoDb.tableName,
-        KeyConditionExpression: 'PK = :pk AND SK = :sk',
-        ExpressionAttributeValues: {
-          ':pk': this.userPk(userId),
-          ':sk': this.roleSk(roleName),
-        },
-        Limit: 1,
       }),
     );
 
-    return (result.Items?.[0] as UserRole | undefined) ?? null;
+    return (result.Item as UserRole | undefined) ?? null;
   }
 
   private userPk(userId: string): string {
