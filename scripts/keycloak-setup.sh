@@ -69,22 +69,25 @@ info "Verificando client '${KEYCLOAK_CLIENT_ID}'..."
 EXISTING_CLIENT=$(kc "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients?clientId=${KEYCLOAK_CLIENT_ID}" \
   | node -e "const c=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(c[0]?.id||'')")
 
+CLIENT_PAYLOAD="{
+  \"clientId\": \"${KEYCLOAK_CLIENT_ID}\",
+  \"enabled\": true,
+  \"publicClient\": true,
+  \"directAccessGrantsEnabled\": true,
+  \"standardFlowEnabled\": false
+}"
+
 if [[ -n "$EXISTING_CLIENT" ]]; then
-  info "Client '${KEYCLOAK_CLIENT_ID}' já existe — atualizando configuração"
   CLIENT_ID_VAL="$EXISTING_CLIENT"
+  kc -X PUT "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients/${CLIENT_ID_VAL}" \
+    -d "$CLIENT_PAYLOAD" >/dev/null
+  ok "Client '${KEYCLOAK_CLIENT_ID}' atualizado (directAccessGrants habilitado)"
 else
   kc -X POST "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients" \
-    -d "{
-      \"clientId\": \"${KEYCLOAK_CLIENT_ID}\",
-      \"enabled\": true,
-      \"publicClient\": true,
-      \"directAccessGrantsEnabled\": true,
-      \"standardFlowEnabled\": false
-    }" >/dev/null
-  ok "Client '${KEYCLOAK_CLIENT_ID}' criado"
-
+    -d "$CLIENT_PAYLOAD" >/dev/null
   CLIENT_ID_VAL=$(kc "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients?clientId=${KEYCLOAK_CLIENT_ID}" \
     | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'))[0].id)")
+  ok "Client '${KEYCLOAK_CLIENT_ID}' criado"
 fi
 
 # ── adiciona audience mapper (aud: nest-api no JWT) ───────────────────────────
