@@ -127,6 +127,9 @@ else
     -d "{
       \"username\": \"${TEST_USERNAME}\",
       \"email\": \"${TEST_USERNAME}@example.com\",
+      \"emailVerified\": true,
+      \"firstName\": \"Test\",
+      \"lastName\": \"User\",
       \"enabled\": true,
       \"credentials\": [{\"type\":\"password\",\"value\":\"${TEST_PASSWORD}\",\"temporary\":false}]
     }" >/dev/null

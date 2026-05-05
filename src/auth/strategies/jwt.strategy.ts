@@ -11,9 +11,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   constructor(private readonly configService: ConfigService) {
     const keycloakUrl = configService.getOrThrow<string>('keycloak.url');
+    const issuerUrl = configService.getOrThrow<string>('keycloak.issuerUrl');
     const realm = configService.getOrThrow<string>('keycloak.realm');
     const clientId = configService.getOrThrow<string>('keycloak.clientId');
-    const issuer = `${keycloakUrl}/realms/${realm}`;
+    const issuer = `${issuerUrl}/realms/${realm}`;
+    const jwksBase = `${keycloakUrl}/realms/${realm}`;
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -25,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         cache: true,
         rateLimit: true,
         jwksRequestsPerMinute: 5,
-        jwksUri: `${issuer}/protocol/openid-connect/certs`,
+        jwksUri: `${jwksBase}/protocol/openid-connect/certs`,
       }),
     });
 

@@ -17,8 +17,8 @@ KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-event-system}"
 KEYCLOAK_CLIENT_ID="${KEYCLOAK_CLIENT_ID:-nest-api}"
 API_URL="${API_URL:-http://localhost:3000}"
-KEYCLOAK_USERNAME="${KEYCLOAK_USERNAME:-}"
-KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-}"
+KEYCLOAK_USERNAME="testuser"
+KEYCLOAK_PASSWORD="testpass"
 
 # ── cores ────────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
