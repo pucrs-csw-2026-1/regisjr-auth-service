@@ -2,6 +2,178 @@
 
 Production-ready starter API using NestJS, Keycloak OpenID Connect JWT validation, and DynamoDB single-table persistence.
 
+## System Design
+
+```mermaid
+flowchart TD
+    Client(["Client\n(browser / app)"])
+
+    subgraph Docker Compose
+        direction TB
+        KC["Keycloak\n:8080\n(OIDC Provider)"]
+        API["NestJS API\n:3000"]
+        DB["DynamoDB Local\n:8000"]
+    end
+
+    Client -->|"1 — POST /token\n(username + password)"| KC
+    KC -->|"2 — access_token (JWT RS256)"| Client
+    Client -->|"3 — HTTP request\nAuthorization: Bearer JWT"| API
+    API -->|"4 — fetch JWKS\n(validate signature + claims)"| KC
+    API -->|"5 — read / write\n(AWS SDK v3)"| DB
+```
+
+## Class Diagram
+
+```mermaid
+classDiagram
+    direction TB
+
+    class AuthController {
+        +getMe(user) AuthenticatedUser
+    }
+
+    class UsersController {
+        +createUser(dto) UserProfileResponse
+        +getUser(id) UserProfileResponse
+        +updateUser(id, dto) UserProfileResponse
+        +deleteUser(id) void
+        +getUserByKeycloakId(keycloakId) UserProfileResponse
+        +assignRole(id, dto) UserRoleResponse
+        +listRoles(id) UserRoleResponse[]
+        +removeRole(id, roleName) void
+    }
+
+    class UsersService {
+        +createProfile(dto) UserProfileResponse
+        +getProfile(userId) UserProfileResponse
+        +getByKeycloakUserId(id) UserProfileResponse
+        +updateProfile(userId, dto) UserProfileResponse
+        +deleteProfile(userId) void
+        +assignRole(userId, dto) UserRoleResponse
+        +listRoles(userId) UserRoleResponse[]
+        +removeRole(userId, roleName) void
+    }
+
+    class UsersRepository {
+        +createProfile(dto) UserProfile
+        +getProfile(userId) UserProfile
+        +getByKeycloakUserId(id) UserProfile
+        +updateProfile(userId, dto) UserProfile
+        +deleteProfile(userId) void
+    }
+
+    class UsersRoleRepository {
+        +assignRole(userId, roleName) UserRole
+        +listRoles(userId) UserRole[]
+        +removeRole(userId, roleName) void
+    }
+
+    class DynamoDbService {
+        +client DynamoDBDocumentClient
+        +tableName string
+    }
+
+    class JwtStrategy {
+        -clientId string
+        +validate(payload) AuthenticatedUser
+    }
+
+    class JwtAuthGuard
+    class RolesGuard {
+        +canActivate(ctx) boolean
+    }
+
+    class UserProfile {
+        +PK string
+        +SK string
+        +GSI1PK string
+        +GSI1SK string
+        +userId string
+        +keycloakUserId string
+        +name string
+        +email string
+        +status UserStatus
+        +createdAt string
+        +updatedAt string
+    }
+
+    class UserRole {
+        +PK string
+        +SK string
+        +userId string
+        +roleName string
+        +assignedAt string
+    }
+
+    class UserStatus {
+        <<enumeration>>
+        ACTIVE
+        INACTIVE
+    }
+
+    AuthController ..> JwtAuthGuard : uses
+    UsersController ..> JwtAuthGuard : uses
+    UsersController ..> RolesGuard : uses
+    UsersController --> UsersService
+    UsersService --> UsersRepository
+    UsersService --> UsersRoleRepository
+    UsersRepository --> DynamoDbService
+    UsersRoleRepository --> DynamoDbService
+    JwtAuthGuard ..> JwtStrategy : delegates
+    UsersRepository ..> UserProfile : persists
+    UsersRoleRepository ..> UserRole : persists
+    UserProfile --> UserStatus
+```
+
+## Database Design
+
+Single-table design no DynamoDB. Tabela: `event-system`.
+
+### Chaves e índices
+
+| | Tabela principal | GSI1 |
+|---|---|---|
+| Partition key | `PK` | `GSI1PK` |
+| Sort key | `SK` | `GSI1SK` |
+
+### Estrutura dos itens
+
+```mermaid
+erDiagram
+    UserProfile {
+        string PK "USER#userId"
+        string SK "PROFILE"
+        string GSI1PK "KEYCLOAK#keycloakUserId"
+        string GSI1SK "PROFILE"
+        string userId
+        string keycloakUserId
+        string name
+        string email
+        string status "ACTIVE | INACTIVE"
+        string createdAt "ISO 8601"
+        string updatedAt "ISO 8601"
+    }
+
+    UserRole {
+        string PK "USER#userId"
+        string SK "ROLE#roleName"
+        string userId
+        string roleName
+        string assignedAt "ISO 8601"
+    }
+
+    UserProfile ||--o{ UserRole : "possui"
+```
+
+### Access patterns
+
+| Operação | Índice | Condição |
+|---|---|---|
+| Buscar perfil por `userId` | Tabela | `PK = USER#<userId>` AND `SK = PROFILE` |
+| Buscar perfil por `keycloakUserId` | GSI1 | `GSI1PK = KEYCLOAK#<id>` AND `GSI1SK = PROFILE` |
+| Listar roles de um usuário | Tabela | `PK = USER#<userId>` AND `SK begins_with ROLE#` |
+| Buscar role específica | Tabela | `PK = USER#<userId>` AND `SK = ROLE#<roleName>` |
+
 ## Stack
 
 - NestJS with TypeScript
