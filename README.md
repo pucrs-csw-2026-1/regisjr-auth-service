@@ -35,13 +35,16 @@ Production-ready starter API using NestJS, Keycloak OpenID Connect JWT validatio
 │   │   └── dynamodb.service.ts
 │   ├── users
 │   │   ├── dto
+│   │   │   ├── assign-role.dto.ts
 │   │   │   ├── create-user-profile.dto.ts
 │   │   │   ├── update-user-profile.dto.ts
-│   │   │   └── user-profile.response.ts
+│   │   │   ├── user-profile.response.ts
+│   │   │   └── user-role.response.ts
 │   │   ├── entities.ts
 │   │   ├── user-status.enum.ts
 │   │   ├── users.controller.ts
 │   │   ├── users.module.ts
+│   │   ├── users-role.repository.ts
 │   │   ├── users.repository.ts
 │   │   └── users.service.ts
 │   ├── app.module.ts
@@ -103,7 +106,13 @@ npm install
 ## Start Keycloak and DynamoDB Local
 
 ```bash
-docker compose up -d keycloak dynamodb-local
+docker compose up -d
+```
+
+This starts Keycloak, DynamoDB Local, runs the table init script automatically, and starts the API. To run only the infrastructure (without the app container):
+
+```bash
+docker compose up -d keycloak dynamodb-local dynamodb-init
 ```
 
 Keycloak admin console:
@@ -157,11 +166,19 @@ http://localhost:3000/docs
 
 ## Endpoints
 
-- `GET /me` returns the authenticated Keycloak token user: `keycloakUserId`, `email`, `username`, and `roles`.
-- `POST /users` creates a user profile in DynamoDB.
-- `GET /users/:id` returns a user profile by internal `userId`.
-
 All endpoints require a Bearer token from Keycloak.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/me` | Returns the authenticated user's claims from the JWT |
+| `POST` | `/users` | Creates a user profile in DynamoDB |
+| `GET` | `/users/:id` | Returns a user profile by internal `userId` |
+| `PATCH` | `/users/:id` | Updates a user profile |
+| `DELETE` | `/users/:id` | Deletes a user profile |
+| `GET` | `/users/by-keycloak/:keycloakId` | Returns a user profile by Keycloak subject ID |
+| `POST` | `/users/:id/roles` | Assigns a role to a user |
+| `GET` | `/users/:id/roles` | Lists all roles assigned to a user |
+| `DELETE` | `/users/:id/roles/:roleName` | Removes a role from a user |
 
 ## Example Requests
 
@@ -180,6 +197,28 @@ curl -X POST http://localhost:3000/users \
     "email": "ada@example.com",
     "status": "ACTIVE"
   }'
+```
+
+```bash
+curl -X POST http://localhost:3000/users/$USER_ID/roles \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"roleName": "organizador"}'
+```
+
+```bash
+curl http://localhost:3000/users/$USER_ID/roles \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+```bash
+curl -X DELETE http://localhost:3000/users/$USER_ID/roles/organizador \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+```bash
+curl http://localhost:3000/users/by-keycloak/$KEYCLOAK_ID \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 ## Automated Keycloak Auth Flow Test

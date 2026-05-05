@@ -1,9 +1,19 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserStatus } from './user-status.enum';
+import { UsersRoleRepository } from './users-role.repository';
 import { UsersRepository } from './users.repository';
 import { UsersService } from './users.service';
-import { UserProfile } from './entities';
+import { UserProfile, UserRole } from './entities';
+
+const mockRole = (roleName = 'organizador'): UserRole => ({
+  PK: 'USER#user-1',
+  SK: `ROLE#${roleName}`,
+  entityType: 'UserRole',
+  userId: 'user-1',
+  roleName,
+  assignedAt: '2024-01-01T00:00:00.000Z',
+});
 
 const mockProfile = (): UserProfile => ({
   PK: 'USER#user-1',
@@ -23,6 +33,7 @@ const mockProfile = (): UserProfile => ({
 describe('UsersService', () => {
   let service: UsersService;
   let repo: jest.Mocked<UsersRepository>;
+  let roleRepo: jest.Mocked<UsersRoleRepository>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -38,11 +49,20 @@ describe('UsersService', () => {
             deleteProfile: jest.fn(),
           },
         },
+        {
+          provide: UsersRoleRepository,
+          useValue: {
+            assignRole: jest.fn(),
+            listRoles: jest.fn(),
+            removeRole: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get(UsersService);
     repo = module.get(UsersRepository);
+    roleRepo = module.get(UsersRoleRepository);
   });
 
   describe('createProfile', () => {
@@ -149,6 +169,82 @@ describe('UsersService', () => {
         NotFoundException,
       );
       expect(repo.deleteProfile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('assignRole', () => {
+    it('returns mapped role response on success', async () => {
+      repo.getProfile.mockResolvedValue(mockProfile());
+      roleRepo.assignRole.mockResolvedValue(mockRole('organizador'));
+
+      const result = await service.assignRole('user-1', { roleName: 'organizador' });
+
+      expect(result.roleName).toBe('organizador');
+      expect(result.userId).toBe('user-1');
+    });
+
+    it('throws NotFoundException when user profile does not exist', async () => {
+      repo.getProfile.mockResolvedValue(null);
+
+      await expect(
+        service.assignRole('nonexistent', { roleName: 'organizador' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(roleRepo.assignRole).not.toHaveBeenCalled();
+    });
+
+    it('propagates ConflictException from repository', async () => {
+      repo.getProfile.mockResolvedValue(mockProfile());
+      roleRepo.assignRole.mockRejectedValue(
+        new ConflictException("Role 'organizador' already assigned to user"),
+      );
+
+      await expect(
+        service.assignRole('user-1', { roleName: 'organizador' }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('listRoles', () => {
+    it('returns all roles mapped as response', async () => {
+      repo.getProfile.mockResolvedValue(mockProfile());
+      roleRepo.listRoles.mockResolvedValue([
+        mockRole('organizador'),
+        mockRole('participante'),
+      ]);
+
+      const result = await service.listRoles('user-1');
+
+      expect(result).toHaveLength(2);
+      expect(result.map((r) => r.roleName)).toEqual(['organizador', 'participante']);
+    });
+
+    it('throws NotFoundException when profile does not exist', async () => {
+      repo.getProfile.mockResolvedValue(null);
+
+      await expect(service.listRoles('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('removeRole', () => {
+    it('resolves without error when profile and role exist', async () => {
+      repo.getProfile.mockResolvedValue(mockProfile());
+      roleRepo.removeRole.mockResolvedValue();
+
+      await expect(
+        service.removeRole('user-1', 'organizador'),
+      ).resolves.toBeUndefined();
+      expect(roleRepo.removeRole).toHaveBeenCalledWith('user-1', 'organizador');
+    });
+
+    it('throws NotFoundException when profile does not exist', async () => {
+      repo.getProfile.mockResolvedValue(null);
+
+      await expect(service.removeRole('nonexistent', 'organizador')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(roleRepo.removeRole).not.toHaveBeenCalled();
     });
   });
 });
