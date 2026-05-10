@@ -11,6 +11,7 @@ const makeConfigService = (clientId = 'nest-api'): ConfigService => ({
   getOrThrow: jest.fn((key: string) => {
     const map: Record<string, string> = {
       'keycloak.url': 'http://localhost:8080',
+      'keycloak.issuerUrl': 'http://localhost:8080',
       'keycloak.realm': 'event-system',
       'keycloak.clientId': clientId,
     };

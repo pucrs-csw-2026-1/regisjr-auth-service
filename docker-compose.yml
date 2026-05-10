@@ -8,6 +8,25 @@ services:
       KC_HTTP_PORT: 8080
     ports:
       - "8080:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+
+  keycloak-init:
+    image: node:lts-alpine
+    depends_on:
+      - keycloak
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: event-system
+      KEYCLOAK_CLIENT_ID: nest-api
+      KEYCLOAK_SA_CLIENT_ID: nest-api-sa
+      KEYCLOAK_SA_CLIENT_SECRET: nest-api-sa-secret
+    volumes:
+      - ./scripts/keycloak-setup.sh:/scripts/keycloak-setup.sh:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - apk add --no-cache bash curl && bash /scripts/keycloak-setup.sh
 
   dynamodb-local:
     image: amazon/dynamodb-local:latest
@@ -32,17 +51,22 @@ services:
       context: .
       target: runner
     depends_on:
+      keycloak-init:
+        condition: service_completed_successfully
       dynamodb-init:
         condition: service_completed_successfully
-      keycloak:
-        condition: service_started
     environment:
       PORT: 3000
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: event-system
       KEYCLOAK_CLIENT_ID: nest-api
+      KEYCLOAK_SA_CLIENT_ID: nest-api-sa
+      KEYCLOAK_SA_CLIENT_SECRET: nest-api-sa-secret
       AWS_REGION: us-east-1
       DYNAMODB_ENDPOINT: http://dynamodb-local:8000
       DYNAMODB_TABLE_NAME: event-system
     ports:
       - "3000:3000"
+
+volumes:
+  keycloak_data:
