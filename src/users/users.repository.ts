@@ -1,3 +1,4 @@
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
   GetCommand,
@@ -110,22 +111,27 @@ export class UsersRepository {
       names['#status'] = 'status';
     }
 
-    const result = await this.dynamoDb.client.send(
-      new UpdateCommand({
-        TableName: this.dynamoDb.tableName,
-        Key: {
-          PK: this.userPk(userId),
-          SK: 'PROFILE',
-        },
-        UpdateExpression: `SET ${updates.join(', ')}`,
-        ...(Object.keys(names).length && { ExpressionAttributeNames: names }),
-        ExpressionAttributeValues: values,
-        ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK)',
-        ReturnValues: 'ALL_NEW',
-      }),
-    );
+    try {
+      const result = await this.dynamoDb.client.send(
+        new UpdateCommand({
+          TableName: this.dynamoDb.tableName,
+          Key: {
+            PK: this.userPk(userId),
+            SK: 'PROFILE',
+          },
+          UpdateExpression: `SET ${updates.join(', ')}`,
+          ...(Object.keys(names).length && { ExpressionAttributeNames: names }),
+          ExpressionAttributeValues: values,
+          ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK)',
+          ReturnValues: 'ALL_NEW',
+        }),
+      );
 
-    return (result.Attributes as UserProfile | undefined) ?? null;
+      return (result.Attributes as UserProfile | undefined) ?? null;
+    } catch (err) {
+      if (err instanceof ConditionalCheckFailedException) return null;
+      throw err;
+    }
   }
 
   async deleteProfile(userId: string): Promise<void> {

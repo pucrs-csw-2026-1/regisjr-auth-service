@@ -6,6 +6,9 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_PORT: 8080
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT: "false"
     ports:
       - "8080:8080"
     volumes:
@@ -58,6 +61,7 @@ services:
     environment:
       PORT: 3000
       KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER_URL: http://localhost:8080
       KEYCLOAK_REALM: event-system
       KEYCLOAK_CLIENT_ID: nest-api
       KEYCLOAK_SA_CLIENT_ID: nest-api-sa

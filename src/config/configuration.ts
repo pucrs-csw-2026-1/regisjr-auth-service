@@ -4,6 +4,7 @@ export const configuration = () => ({
   port: Number(process.env.PORT ?? 3000),
   keycloak: {
     url: process.env.KEYCLOAK_URL,
+    issuerUrl: process.env.KEYCLOAK_ISSUER_URL ?? process.env.KEYCLOAK_URL,
     realm: process.env.KEYCLOAK_REALM,
     clientId: process.env.KEYCLOAK_CLIENT_ID,
     saClientId: process.env.KEYCLOAK_SA_CLIENT_ID,

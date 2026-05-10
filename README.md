@@ -141,22 +141,22 @@ Single-table design no DynamoDB. Tabela: `event-system`.
 ```mermaid
 erDiagram
     UserProfile {
-        string PK "USER#userId"
-        string SK "PROFILE"
-        string GSI1PK "KEYCLOAK#keycloakUserId"
-        string GSI1SK "PROFILE"
+        string partitionKey "USER-userId"
+        string sortKey "PROFILE"
+        string gsi1PartitionKey "KEYCLOAK-keycloakUserId"
+        string gsi1SortKey "PROFILE"
         string userId
         string keycloakUserId
         string name
         string email
-        string status "ACTIVE | INACTIVE"
+        string status "ACTIVE or INACTIVE"
         string createdAt "ISO 8601"
         string updatedAt "ISO 8601"
     }
 
     UserRole {
-        string PK "USER#userId"
-        string SK "ROLE#roleName"
+        string partitionKey "USER-userId"
+        string sortKey "ROLE-roleName"
         string userId
         string roleName
         string assignedAt "ISO 8601"
