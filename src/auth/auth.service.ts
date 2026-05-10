@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { RefreshDto } from './dto/refresh.dto';
@@ -20,7 +21,10 @@ export class AuthService {
   private readonly saClientId: string;
   private readonly saClientSecret: string;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly usersService: UsersService,
+  ) {
     this.keycloakUrl = this.config.getOrThrow<string>('keycloak.url');
     this.realm = this.config.getOrThrow<string>('keycloak.realm');
     this.clientId = this.config.getOrThrow<string>('keycloak.clientId');
@@ -67,7 +71,12 @@ export class AuthService {
       );
     }
 
-    return this.login({ username: dto.username, password: dto.password });
+    const tokens = await this.login({ username: dto.username, password: dto.password });
+
+    const keycloakUserId = this.extractSub(tokens.access_token);
+    await this.usersService.createProfile({ keycloakUserId, name: dto.name, email: dto.email });
+
+    return tokens;
   }
 
   async login(dto: LoginDto): Promise<TokenResponse> {
@@ -178,5 +187,11 @@ export class AuthService {
 
   private tokenUrl(): string {
     return `${this.keycloakUrl}/realms/${this.realm}/protocol/openid-connect/token`;
+  }
+
+  private extractSub(accessToken: string): string {
+    const payload = accessToken.split('.')[1];
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { sub: string };
+    return decoded.sub;
   }
 }
