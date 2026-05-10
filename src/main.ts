@@ -2,13 +2,15 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  app.enableCors();
+  app.enableCors({ credentials: true });
+  app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -30,6 +32,12 @@ async function bootstrap() {
       },
       'keycloak',
     )
+    .addCookieAuth('refresh_token', {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'refresh_token',
+      description: 'Refresh token cookie (httpOnly)',
+    })
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
