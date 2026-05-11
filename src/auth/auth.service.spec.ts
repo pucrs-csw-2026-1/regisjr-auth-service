@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
 
 const makeConfigService = (): ConfigService =>
@@ -36,19 +37,31 @@ const mockFetchStatus = (status: number, body: unknown = {}): jest.SpyInstance =
     json: () => Promise.resolve(body),
   } as Response);
 
+const makeJwt = (sub: string): string => {
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ sub, exp: 9999999999 })).toString('base64url');
+  return `${header}.${payload}.fake-signature`;
+};
+
 const SA_TOKEN = { access_token: 'sa-token' };
 const TOKENS = {
-  access_token: 'access-token',
+  access_token: makeJwt('kc-user-id-123'),
   refresh_token: 'refresh-token',
   expires_in: 300,
   token_type: 'Bearer',
 };
 
+const makeUsersService = (): jest.Mocked<Pick<UsersService, 'createProfile'>> => ({
+  createProfile: jest.fn().mockResolvedValue({}),
+});
+
 describe('AuthService', () => {
   let service: AuthService;
+  let usersService: jest.Mocked<Pick<UsersService, 'createProfile'>>;
 
   beforeEach(() => {
-    service = new AuthService(makeConfigService());
+    usersService = makeUsersService();
+    service = new AuthService(makeConfigService(), usersService as unknown as UsersService);
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -70,8 +83,8 @@ describe('AuthService', () => {
         password: 'secret123',
       });
 
-      expect(result.access_token).toBe('access-token');
-      expect(result.refresh_token).toBe('refresh-token');
+      expect(result.access_token).toBe(TOKENS.access_token);
+      expect(result.refresh_token).toBe(TOKENS.refresh_token);
     });
 
     it('splits multi-word name into firstName and lastName', async () => {
@@ -134,6 +147,22 @@ describe('AuthService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('creates a DynamoDB profile with keycloakUserId extracted from access_token', async () => {
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(SA_TOKEN) } as Response)
+        .mockResolvedValueOnce({ ok: true, status: 201, json: () => Promise.resolve({}) } as Response)
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(TOKENS) } as Response);
+
+      await service.register({ name: 'Ada Lovelace', email: 'ada@example.com', username: 'ada', password: 'pass123' });
+
+      expect(usersService.createProfile).toHaveBeenCalledWith({
+        keycloakUserId: expect.any(String),
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+      });
+    });
+
     it('throws InternalServerErrorException when service account auth fails', async () => {
       mockFetchStatus(500);
 
@@ -151,8 +180,8 @@ describe('AuthService', () => {
 
       const result = await service.login({ username: 'ada', password: 'secret123' });
 
-      expect(result.access_token).toBe('access-token');
-      expect(result.refresh_token).toBe('refresh-token');
+      expect(result.access_token).toBe(TOKENS.access_token);
+      expect(result.refresh_token).toBe(TOKENS.refresh_token);
     });
 
     it('uses password grant with correct params', async () => {
@@ -200,7 +229,7 @@ describe('AuthService', () => {
 
       const result = await service.refresh({ refresh_token: 'valid-refresh' });
 
-      expect(result.access_token).toBe('access-token');
+      expect(result.access_token).toBe(TOKENS.access_token);
     });
 
     it('uses refresh_token grant with correct params', async () => {
